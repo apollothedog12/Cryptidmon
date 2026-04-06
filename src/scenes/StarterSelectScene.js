@@ -282,7 +282,7 @@ export class StarterSelectScene {
             const spriteX = x + cardW / 2;
             const spriteY = spriteAreaY + spriteAreaH / 2;
             const bob = isSelected ? Math.sin(this.timer / 400) * 3 : 0;
-            canvas.drawCryptidSprite(spriteX, spriteY + bob, 30, starter.spriteColor, null);
+            canvas.drawCryptidSprite(spriteX, spriteY + bob, 30, starter.spriteColor, null, false, starter.templateId);
 
             // Name
             canvas.drawTextShadow(

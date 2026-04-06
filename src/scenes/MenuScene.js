@@ -300,7 +300,7 @@ export class MenuScene {
         canvas.drawText(`Level ${c.level}`, x + w / 2, y + 24, '#aaa', 11, 'center');
 
         // Sprite
-        canvas.drawCryptidSprite(x + 60, y + 70, 36, c.spriteColor, null);
+        canvas.drawCryptidSprite(x + 60, y + 70, 36, c.spriteColor, null, false, c.templateId);
 
         // Types
         for (let t = 0; t < c.types.length; t++) {

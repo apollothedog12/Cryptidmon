@@ -1189,7 +1189,7 @@ export class BattleScene {
             }
 
             canvas.setAlpha(eAlpha);
-            canvas.drawCryptidSprite(ex, ey, 55, this.enemyCryptid.spriteColor, null, false);
+            canvas.drawCryptidSprite(ex, ey, 55, this.enemyCryptid.spriteColor, null, false, this.enemyCryptid.templateId);
             canvas.resetAlpha();
 
             // Status icon for enemy
@@ -1234,7 +1234,7 @@ export class BattleScene {
             }
 
             canvas.setAlpha(pAlpha);
-            canvas.drawCryptidSprite(px, py, 65, this.playerCryptid.spriteColor, null, true);
+            canvas.drawCryptidSprite(px, py, 65, this.playerCryptid.spriteColor, null, true, this.playerCryptid.templateId);
             canvas.resetAlpha();
 
             // Status icon for player

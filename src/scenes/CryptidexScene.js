@@ -271,7 +271,7 @@ export class CryptidexScene {
         const spriteX = panelX + 70;
         const spriteY = panelY + 70;
         canvas.drawRectUI(spriteX - 30, spriteY - 30, 60, 60, 'rgba(0,0,0,0.3)');
-        canvas.drawCryptidSprite(spriteX, spriteY, 28, cryptid.spriteColor || '#888', null);
+        canvas.drawCryptidSprite(spriteX, spriteY, 28, cryptid.spriteColor || '#888', null, false, cryptid.id);
 
         // Types
         const types = cryptid.types || [];

@@ -1,4 +1,5 @@
 import { SCREEN_W, SCREEN_H, TILE_SIZE } from '../utils/constants.js';
+import { drawCryptidSprite as drawCustomSprite } from '../ui/CryptidSprites.js';
 
 export class Canvas {
     constructor() {
@@ -137,25 +138,40 @@ export class Canvas {
         this.ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w * Math.max(0, ratio)), h);
     }
 
-    drawCryptidSprite(x, y, size, color, name, isBack = false) {
+    drawCryptidSprite(x, y, size, color, name, isBack = false, cryptidId = null) {
         const cx = Math.floor(x);
         const cy = Math.floor(y);
         const s = size;
+        const animFrame = Math.floor(Date.now() / 250) % 4;
 
-        // Body
+        // Shadow beneath
+        this.ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        this.ctx.beginPath();
+        this.ctx.ellipse(cx, cy + s * 0.5, s * 0.35, s * 0.08, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Try custom sprite first
+        if (cryptidId) {
+            try {
+                drawCustomSprite(this.ctx, cryptidId, cx, cy, s, isBack, animFrame);
+                return;
+            } catch(e) {
+                // Fall through to default
+            }
+        }
+
+        // Default fallback sprite
         this.ctx.fillStyle = color;
         this.ctx.beginPath();
         this.ctx.ellipse(cx, cy + s * 0.1, s * 0.4, s * 0.45, 0, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Darker shade for depth
         this.ctx.fillStyle = this.darkenColor(color, 30);
         this.ctx.beginPath();
         this.ctx.ellipse(cx, cy + s * 0.25, s * 0.35, s * 0.25, 0, 0, Math.PI * 2);
         this.ctx.fill();
 
         if (!isBack) {
-            // Eyes
             this.ctx.fillStyle = '#fff';
             this.ctx.beginPath();
             this.ctx.ellipse(cx - s * 0.15, cy - s * 0.1, s * 0.08, s * 0.1, 0, 0, Math.PI * 2);
@@ -164,7 +180,6 @@ export class Canvas {
             this.ctx.ellipse(cx + s * 0.15, cy - s * 0.1, s * 0.08, s * 0.1, 0, 0, Math.PI * 2);
             this.ctx.fill();
 
-            // Pupils
             this.ctx.fillStyle = '#111';
             this.ctx.beginPath();
             this.ctx.arc(cx - s * 0.13, cy - s * 0.08, s * 0.04, 0, Math.PI * 2);
@@ -174,13 +189,6 @@ export class Canvas {
             this.ctx.fill();
         }
 
-        // Shadow beneath
-        this.ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        this.ctx.beginPath();
-        this.ctx.ellipse(cx, cy + s * 0.5, s * 0.35, s * 0.08, 0, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Name label
         if (name) {
             this.drawText(name, cx, cy + s * 0.55, '#fff', 10, 'center');
         }

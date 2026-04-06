@@ -239,7 +239,7 @@ export class EvolutionScene {
 
         // Cryptid sprite
         const spriteSize = 32 * this.spriteScale;
-        canvas.drawCryptidSprite(cx, cy, spriteSize, this.spriteColor, null);
+        canvas.drawCryptidSprite(cx, cy, spriteSize, this.spriteColor, null, false, this.cryptid.templateId);
 
         // Glow ring around sprite during morphing
         if (this.phase === 1) {
