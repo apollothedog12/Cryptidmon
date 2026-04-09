@@ -291,6 +291,7 @@ game.onWildEncounter = (wildCryptid) => {
         battleSystem,
         catchSystem,
         (result) => game.onBattleEnd(result),
+        currentRegion,
     );
     game.transitionTo(battleScene);
 };
@@ -345,6 +346,7 @@ game.onTrainerBattle = (npc) => {
 
             game.onBattleEnd(result);
         },
+        currentRegion,
     );
     game.transitionTo(battleScene);
 };

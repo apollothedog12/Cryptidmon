@@ -1,5 +1,7 @@
 import { SCREEN_W, SCREEN_H, TILE_SIZE, COLORS, TYPE_COLORS } from '../utils/constants.js';
 import { Player } from '../entities/Player.js';
+import { TileRenderer, getTheme } from '../ui/TileRenderer.js';
+import { AmbientEffects } from '../ui/AmbientEffects.js';
 
 export class OverworldScene {
     constructor(mapData, mapMeta, npcs, regionId, encounterSystem, questSystem, player) {
@@ -23,19 +25,12 @@ export class OverworldScene {
         this.dialogueCallback = null;
         this.interactingNpc = null;
 
-        // Tile colors
-        this.tileColors = {
-            0: '#4a8c3f', // grass
-            1: '#2d5a27', // tree
-            2: '#5ca84f', // tall grass
-            3: '#3a7bd5', // water
-            4: '#c4a862', // path
-            5: '#8b7355', // building
-            6: '#a0522d', // sign
-            7: '#4a8c3f', // npc spawn (grass)
-            8: '#e8d44d', // zone exit
-            9: '#6b8c3f', // ledge
-        };
+        // New rendering systems
+        this.theme = getTheme(regionId);
+        this.tileRenderer = new TileRenderer(this.theme);
+        this.ambient = new AmbientEffects(this.theme.ambient);
+        this.time = 0;
+        this.footstepParticles = [];
     }
 
     enter() {
@@ -83,6 +78,19 @@ export class OverworldScene {
     }
 
     update(dt) {
+        this.time += dt;
+        this.tileRenderer.setTime(this.time);
+        this.ambient.update(dt);
+
+        // Update footstep particles
+        for (let i = this.footstepParticles.length - 1; i >= 0; i--) {
+            const fp = this.footstepParticles[i];
+            fp.age += dt;
+            fp.alpha = Math.max(0, 1 - fp.age / fp.life);
+            fp.y -= dt * 0.02;
+            if (fp.age > fp.life) this.footstepParticles.splice(i, 1);
+        }
+
         // Handle dialogue
         if (this.dialogueActive) {
             if (this.input.actionJustPressed) {
@@ -149,6 +157,18 @@ export class OverworldScene {
 
     onPlayerStep() {
         const tile = this.map[this.player.tileY]?.[this.player.tileX];
+
+        // Spawn a footstep puff
+        const px = this.player.x + TILE_SIZE / 2;
+        const py = this.player.y + TILE_SIZE - 2;
+        for (let i = 0; i < 3; i++) {
+            this.footstepParticles.push({
+                x: px + (Math.random() - 0.5) * 10,
+                y: py + (Math.random() - 0.5) * 3,
+                age: 0, life: 400, alpha: 1,
+                size: 1 + Math.random() * 2,
+            });
+        }
 
         // Wild encounter check
         if (tile === 2) {
@@ -262,89 +282,75 @@ export class OverworldScene {
     }
 
     render(canvas) {
+        const ctx = canvas.ctx;
         const startCol = Math.max(0, Math.floor(canvas.camera.x / TILE_SIZE) - 1);
         const endCol = Math.min(this.cols, startCol + Math.ceil(SCREEN_W / TILE_SIZE) + 3);
         const startRow = Math.max(0, Math.floor(canvas.camera.y / TILE_SIZE) - 1);
         const endRow = Math.min(this.rows, startRow + Math.ceil(SCREEN_H / TILE_SIZE) + 3);
 
-        // Draw tiles
+        // Sky/backdrop fill
+        ctx.fillStyle = this.theme.grassLo;
+        ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+
+        const camX = canvas.camera.x - canvas.shake.x;
+        const camY = canvas.camera.y - canvas.shake.y;
+
+        // Draw tiles using the rich TileRenderer
         for (let y = startRow; y < endRow; y++) {
             for (let x = startCol; x < endCol; x++) {
                 const tile = this.map[y][x];
-                const color = this.tileColors[tile] || '#333';
-                canvas.drawRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, color);
-
-                // Tall grass detail
-                if (tile === 2) {
-                    canvas.drawRect(x * TILE_SIZE + 4, y * TILE_SIZE + 2, 3, 12, '#3d7a2e');
-                    canvas.drawRect(x * TILE_SIZE + 12, y * TILE_SIZE + 5, 3, 10, '#3d7a2e');
-                    canvas.drawRect(x * TILE_SIZE + 22, y * TILE_SIZE + 3, 3, 11, '#3d7a2e');
-                }
-
-                // Water animation
-                if (tile === 3) {
-                    const wave = Math.sin((x + y + Date.now() / 500) * 0.5) * 2;
-                    canvas.drawRect(x * TILE_SIZE + 4, y * TILE_SIZE + 10 + wave, 10, 2, 'rgba(255,255,255,0.2)');
-                    canvas.drawRect(x * TILE_SIZE + 18, y * TILE_SIZE + 16 + wave, 8, 2, 'rgba(255,255,255,0.15)');
-                }
-
-                // Tree detail
-                if (tile === 1) {
-                    canvas.drawRect(x * TILE_SIZE + 12, y * TILE_SIZE + 18, 8, 14, '#5c3a1e');
-                    canvas.drawCircle(x * TILE_SIZE + 16, y * TILE_SIZE + 12, 12, '#1a4d1a');
-                    canvas.drawCircle(x * TILE_SIZE + 16, y * TILE_SIZE + 8, 10, '#2d6a2d');
-                }
-
-                // Building
-                if (tile === 5) {
-                    canvas.drawRect(x * TILE_SIZE + 2, y * TILE_SIZE + 6, TILE_SIZE - 4, TILE_SIZE - 6, '#6b4423');
-                    canvas.drawRect(x * TILE_SIZE + 4, y * TILE_SIZE, TILE_SIZE - 8, 8, '#8b5e3c');
-                    canvas.drawRect(x * TILE_SIZE + 11, y * TILE_SIZE + 16, 10, 16, '#4a3015');
-                    canvas.drawRect(x * TILE_SIZE + 6, y * TILE_SIZE + 10, 6, 6, '#87ceeb');
-                    canvas.drawRect(x * TILE_SIZE + 20, y * TILE_SIZE + 10, 6, 6, '#87ceeb');
-                }
-
-                // Sign
-                if (tile === 6) {
-                    canvas.drawRect(x * TILE_SIZE + 14, y * TILE_SIZE + 16, 4, 16, '#5c3a1e');
-                    canvas.drawRect(x * TILE_SIZE + 6, y * TILE_SIZE + 8, 20, 12, '#c4a862');
-                }
-
-                // Zone exit glow
-                if (tile === 8) {
-                    const glow = Math.sin(Date.now() / 300) * 0.2 + 0.3;
-                    canvas.ctx.fillStyle = `rgba(232,212,77,${glow})`;
-                    canvas.ctx.fillRect(
-                        x * TILE_SIZE - canvas.camera.x + canvas.shake.x,
-                        y * TILE_SIZE - canvas.camera.y + canvas.shake.y,
-                        TILE_SIZE, TILE_SIZE
-                    );
-                }
-
-                // Grid lines (subtle)
-                canvas.drawRectOutline(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, 'rgba(0,0,0,0.05)');
+                const sx = Math.floor(x * TILE_SIZE - camX);
+                const sy = Math.floor(y * TILE_SIZE - camY);
+                this.tileRenderer.drawTile(ctx, tile, x, y, sx, sy);
             }
         }
 
-        // Draw NPCs
-        for (const npc of this.npcs) {
-            if (npc.x >= startCol && npc.x < endCol && npc.y >= startRow && npc.y < endRow) {
-                this.renderNpc(canvas, npc);
-            }
+        // Atmospheric color wash
+        if (this.theme.lightTint) {
+            ctx.fillStyle = this.theme.lightTint;
+            ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+        }
+
+        // Footstep puffs behind player
+        for (const fp of this.footstepParticles) {
+            ctx.globalAlpha = fp.alpha * 0.5;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(fp.x - camX, fp.y - camY, fp.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Draw NPCs (sorted by y for simple depth)
+        const visibleNpcs = this.npcs.filter(n => n.x >= startCol && n.x < endCol && n.y >= startRow && n.y < endRow);
+        const sortedNpcs = [...visibleNpcs].sort((a, b) => a.y - b.y);
+        for (const npc of sortedNpcs) {
+            this.renderNpc(canvas, npc);
         }
 
         // Draw player
         this.player.render(canvas);
 
-        // Draw tall grass over player (for depth effect)
+        // Draw tall grass overlay in front of player feet (depth illusion)
         for (let y = startRow; y < endRow; y++) {
             for (let x = startCol; x < endCol; x++) {
                 if (this.map[y][x] === 2) {
-                    canvas.drawRect(x * TILE_SIZE + 8, y * TILE_SIZE + 20, 3, 8, '#3d7a2e80');
-                    canvas.drawRect(x * TILE_SIZE + 20, y * TILE_SIZE + 22, 3, 7, '#3d7a2e80');
+                    const sx = Math.floor(x * TILE_SIZE - camX);
+                    const sy = Math.floor(y * TILE_SIZE - camY);
+                    const sway = Math.sin(this.time * 0.003 + (x + y) * 0.7) * 1.5;
+                    ctx.fillStyle = 'rgba(30, 70, 20, 0.7)';
+                    ctx.fillRect(sx + 6 + sway, sy + 22, 2, 8);
+                    ctx.fillRect(sx + 18 + sway, sy + 24, 2, 7);
+                    ctx.fillRect(sx + 26 + sway, sy + 21, 2, 9);
                 }
             }
         }
+
+        // Ambient particles (foreground atmosphere)
+        this.ambient.render(ctx);
+
+        // Vignette for focus
+        this.ambient.renderVignette(ctx);
 
         // HUD
         this.renderHUD(canvas);
@@ -361,98 +367,252 @@ export class OverworldScene {
     }
 
     renderNpc(canvas, npc) {
+        const ctx = canvas.ctx;
         const dx = npc.x * TILE_SIZE - canvas.camera.x + canvas.shake.x;
         const dy = npc.y * TILE_SIZE - canvas.camera.y + canvas.shake.y;
+        const cx = dx + TILE_SIZE / 2;
+
+        // Idle bob
+        const bob = Math.sin(this.time * 0.003 + (npc.x + npc.y)) * 1;
 
         // Shadow
-        canvas.ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        canvas.ctx.beginPath();
-        canvas.ctx.ellipse(dx + TILE_SIZE / 2, dy + TILE_SIZE - 2, 10, 4, 0, 0, Math.PI * 2);
-        canvas.ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(cx, dy + TILE_SIZE - 2, 9, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Role-specific clothing color
+        const roleColors = {
+            healer: '#f48fb1',
+            shopkeeper: '#c8a238',
+            trainer: '#c83838',
+            boss: '#881122',
+            professor: '#3a5a8a',
+            questgiver: '#3a8a48',
+            default: '#c84848',
+        };
+        const bodyColor = npc.sprite || roleColors[npc.role] || roleColors.default;
+        const bodyDark = this.shadeHex(bodyColor, -30);
 
         // Body
-        canvas.ctx.fillStyle = npc.sprite || '#e74c3c';
-        canvas.ctx.fillRect(dx + 6, dy + 8, TILE_SIZE - 12, TILE_SIZE - 10);
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(dx + 7, dy + 15 + bob, TILE_SIZE - 14, 14);
+        // Shoulder shadow
+        ctx.fillStyle = bodyDark;
+        ctx.fillRect(dx + 7, dy + 27 + bob, TILE_SIZE - 14, 2);
+        // Legs
+        ctx.fillStyle = '#2a2018';
+        ctx.fillRect(dx + 10, dy + 29, 4, 3);
+        ctx.fillRect(dx + 18, dy + 29, 4, 3);
 
         // Head
-        canvas.ctx.fillStyle = '#f5cba7';
-        canvas.ctx.beginPath();
-        canvas.ctx.arc(dx + TILE_SIZE / 2, dy + 8, 8, 0, Math.PI * 2);
-        canvas.ctx.fill();
+        ctx.fillStyle = '#f5cba7';
+        ctx.beginPath();
+        ctx.arc(cx, dy + 9 + bob, 7, 0, Math.PI * 2);
+        ctx.fill();
+        // Hair
+        ctx.fillStyle = npc.role === 'professor' ? '#e0e0e0' : '#3a2010';
+        ctx.beginPath();
+        ctx.arc(cx, dy + 6 + bob, 7, Math.PI, 0);
+        ctx.fill();
+        // Eyes
+        ctx.fillStyle = '#111';
+        ctx.fillRect(cx - 3, dy + 9 + bob, 1, 2);
+        ctx.fillRect(cx + 2, dy + 9 + bob, 1, 2);
 
-        // Role indicator
-        const indicators = {
-            healer: '#ff69b4',
-            shopkeeper: '#ffd700',
-            trainer: '#ff4444',
-            boss: '#ff0000',
-            professor: '#4488cc',
-            questgiver: '#44ff44',
+        // Role icon above NPC
+        const icons = {
+            healer: { color: '#ff69b4', symbol: '+' },
+            shopkeeper: { color: '#ffd700', symbol: '$' },
+            trainer: { color: '#ff4444', symbol: '*' },
+            boss: { color: '#ff0000', symbol: '*' },
+            professor: { color: '#4488cc', symbol: '?' },
+            questgiver: { color: '#44ff44', symbol: '!' },
         };
-        if (indicators[npc.role]) {
-            canvas.ctx.fillStyle = indicators[npc.role];
-            canvas.ctx.beginPath();
-            canvas.ctx.arc(dx + TILE_SIZE / 2, dy - 2, 4, 0, Math.PI * 2);
-            canvas.ctx.fill();
+        const icon = icons[npc.role];
+        if (icon) {
+            const py = dy - 6 + Math.sin(this.time * 0.004) * 2;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.beginPath();
+            ctx.arc(cx, py, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = icon.color;
+            ctx.beginPath();
+            ctx.arc(cx, py, 5, 0, Math.PI * 2);
+            ctx.fill();
+            canvas.drawText(icon.symbol, cx, py - 5, '#fff', 10, 'center');
         }
 
         // Exclamation mark for quest givers with available quests
         if (npc.role === 'questgiver' && npc.questId && !this.game.globalState.questStates[npc.questId]) {
-            canvas.drawTextShadow('!', dx + TILE_SIZE / 2, dy - 12, '#ffff00', 14, 'center');
+            const py = dy - 18 + Math.sin(this.time * 0.008) * 2;
+            canvas.drawTextShadow('!', cx, py, '#ffff00', 16, 'center');
         }
     }
 
+    shadeHex(hex, amt) {
+        if (!hex || hex[0] !== '#' || hex.length < 7) return hex;
+        let r = parseInt(hex.slice(1, 3), 16) + amt;
+        let g = parseInt(hex.slice(3, 5), 16) + amt;
+        let b = parseInt(hex.slice(5, 7), 16) + amt;
+        r = Math.max(0, Math.min(255, r));
+        g = Math.max(0, Math.min(255, g));
+        b = Math.max(0, Math.min(255, b));
+        return `rgb(${r},${g},${b})`;
+    }
+
     renderHUD(canvas) {
-        // Top bar
-        canvas.drawRectUI(0, 0, SCREEN_W, 24, 'rgba(0,0,0,0.6)');
+        const ctx = canvas.ctx;
 
-        // Region name
-        canvas.drawText(this.mapMeta?.name || this.regionId, 8, 5, '#fff', 12);
+        // Top bar - gradient
+        const topG = ctx.createLinearGradient(0, 0, 0, 28);
+        topG.addColorStop(0, 'rgba(10, 10, 30, 0.88)');
+        topG.addColorStop(1, 'rgba(10, 10, 30, 0.5)');
+        ctx.fillStyle = topG;
+        ctx.fillRect(0, 0, SCREEN_W, 28);
+        // Top bar border
+        ctx.strokeStyle = 'rgba(255, 180, 80, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, 28.5);
+        ctx.lineTo(SCREEN_W, 28.5);
+        ctx.stroke();
 
-        // Party HP dots
-        const dotX = SCREEN_W - 8;
+        // Region name with icon
+        ctx.fillStyle = '#ff9838';
+        ctx.beginPath();
+        ctx.arc(14, 14, 4, 0, Math.PI * 2);
+        ctx.fill();
+        canvas.drawTextShadow(this.mapMeta?.name || this.regionId, 24, 8, '#fff', 12);
+
+        // Gold with coin icon
+        const goldText = `${this.game.globalState.gold}G`;
+        ctx.font = '11px monospace';
+        const goldW = ctx.measureText(goldText).width;
+        const goldX = SCREEN_W / 2 - goldW / 2;
+        // Coin
+        const coinPulse = 0.9 + Math.sin(this.time * 0.004) * 0.1;
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(goldX - 8, 13, 5 * coinPulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#b8860b';
+        ctx.beginPath();
+        ctx.arc(goldX - 8, 13, 3 * coinPulse, 0, Math.PI * 2);
+        ctx.fill();
+        canvas.drawTextShadow(goldText, SCREEN_W / 2 + 4, 8, '#ffd700', 11, 'center');
+
+        // Party cryptid orbs with HP rings
+        const partyStartX = SCREEN_W - 8;
         for (let i = this.player.party.length - 1; i >= 0; i--) {
             const c = this.player.party[i];
-            const color = c.isFainted ? '#f44336' : (c.hpRatio > 0.5 ? '#4caf50' : (c.hpRatio > 0.25 ? '#ff9800' : '#f44336'));
-            canvas.drawCircleUI(dotX - (this.player.party.length - 1 - i) * 14, 12, 5, color);
+            const ox = partyStartX - (this.player.party.length - 1 - i) * 16;
+            const oy = 14;
+            const hpColor = c.isFainted ? '#f44336' : (c.hpRatio > 0.5 ? '#4caf50' : (c.hpRatio > 0.25 ? '#ff9800' : '#f44336'));
+            // Outer ring
+            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(ox, oy, 6, 0, Math.PI * 2);
+            ctx.stroke();
+            // HP arc
+            ctx.strokeStyle = hpColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(ox, oy, 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, c.hpRatio));
+            ctx.stroke();
+            // Center
+            ctx.fillStyle = c.spriteColor || '#888';
+            ctx.beginPath();
+            ctx.arc(ox, oy, 4, 0, Math.PI * 2);
+            ctx.fill();
         }
 
-        // Gold
-        canvas.drawText(`${this.game.globalState.gold}G`, SCREEN_W / 2, 5, '#ffd700', 11, 'center');
-
-        // Current quest hint
+        // Current quest hint at bottom
         const mainQuest = this.questSystem?.getCurrentMainQuest();
         if (mainQuest) {
             const obj = mainQuest.objectives.find(o => !o.completed);
             if (obj) {
-                canvas.drawRectUI(0, SCREEN_H - 20, SCREEN_W, 20, 'rgba(0,0,0,0.4)');
-                canvas.drawText(`Quest: ${obj.description}`, 8, SCREEN_H - 16, '#aaa', 10);
+                const barY = SCREEN_H - 22;
+                const barG = ctx.createLinearGradient(0, barY, 0, SCREEN_H);
+                barG.addColorStop(0, 'rgba(10,10,30,0.3)');
+                barG.addColorStop(1, 'rgba(10,10,30,0.85)');
+                ctx.fillStyle = barG;
+                ctx.fillRect(0, barY, SCREEN_W, 22);
+                ctx.strokeStyle = 'rgba(255, 180, 80, 0.4)';
+                ctx.beginPath();
+                ctx.moveTo(0, barY + 0.5);
+                ctx.lineTo(SCREEN_W, barY + 0.5);
+                ctx.stroke();
+                // Quest marker diamond
+                ctx.fillStyle = '#ffeb3b';
+                ctx.save();
+                ctx.translate(10, barY + 11);
+                ctx.rotate(Math.PI / 4);
+                ctx.fillRect(-3, -3, 6, 6);
+                ctx.restore();
+                canvas.drawTextShadow(obj.description, 18, barY + 6, '#fff', 10);
             }
         }
     }
 
     renderDialogue(canvas) {
-        const boxH = 70;
+        const ctx = canvas.ctx;
+        const boxH = 74;
         const boxY = SCREEN_H - boxH - 10;
+        const boxX = 10;
+        const boxW = SCREEN_W - 20;
 
-        // Box background
-        canvas.drawRectUI(10, boxY, SCREEN_W - 20, boxH, 'rgba(10,10,30,0.92)');
-        canvas.drawRectOutlineUI(10, boxY, SCREEN_W - 20, boxH, '#fff', 2);
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(boxX + 3, boxY + 3, boxW, boxH);
 
-        // NPC name
+        // Box background gradient
+        const g = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+        g.addColorStop(0, 'rgba(18, 20, 48, 0.96)');
+        g.addColorStop(1, 'rgba(8, 10, 28, 0.96)');
+        ctx.fillStyle = g;
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+
+        // Double-border
+        ctx.strokeStyle = '#ff9838';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+        ctx.strokeStyle = 'rgba(255, 200, 120, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX + 3, boxY + 3, boxW - 6, boxH - 6);
+
+        // Corner decorations
+        ctx.fillStyle = '#ff9838';
+        for (const [cx, cy] of [[boxX, boxY], [boxX + boxW, boxY], [boxX, boxY + boxH], [boxX + boxW, boxY + boxH]]) {
+            ctx.fillRect(cx - 2, cy - 2, 4, 4);
+        }
+
+        // NPC name with underline
+        let textY = boxY + 10;
         if (this.interactingNpc) {
-            canvas.drawText(this.interactingNpc.name, 20, boxY + 6, '#ff6b35', 12);
+            canvas.drawTextShadow(this.interactingNpc.name, boxX + 12, boxY + 8, '#ff9838', 13);
+            ctx.fillStyle = 'rgba(255, 152, 56, 0.3)';
+            ctx.fillRect(boxX + 12, boxY + 22, 80, 1);
+            textY = boxY + 28;
         }
 
         // Text
         const text = this.dialogueText[this.dialogueIndex] || '';
-        const nameOffset = this.interactingNpc ? 20 : 8;
-        this.wrapText(canvas, text, 20, boxY + nameOffset, SCREEN_W - 50, 12, '#fff');
+        this.wrapText(canvas, text, boxX + 14, textY, boxW - 30, 12, '#fff');
 
-        // Continue indicator
-        const blink = Math.sin(Date.now() / 300) > 0;
-        if (blink) {
-            canvas.drawText('v', SCREEN_W - 30, boxY + boxH - 16, '#fff', 12, 'center');
+        // Animated continue indicator
+        const bounce = Math.sin(this.time * 0.006) > 0;
+        if (bounce) {
+            const cx = boxX + boxW - 18;
+            const cy = boxY + boxH - 12;
+            ctx.fillStyle = '#ff9838';
+            ctx.beginPath();
+            ctx.moveTo(cx - 4, cy - 3);
+            ctx.lineTo(cx + 4, cy - 3);
+            ctx.lineTo(cx, cy + 3);
+            ctx.closePath();
+            ctx.fill();
         }
     }
 
@@ -479,11 +639,30 @@ export class OverworldScene {
     }
 
     renderNotification(canvas) {
+        const ctx = canvas.ctx;
         const alpha = Math.min(1, this.notificationTimer / 500);
-        canvas.setAlpha(alpha);
-        canvas.drawRectUI(SCREEN_W / 2 - 100, 30, 200, 28, 'rgba(0,0,0,0.8)');
-        canvas.drawRectOutlineUI(SCREEN_W / 2 - 100, 30, 200, 28, '#ff6b35', 1);
-        canvas.drawText(this.notification, SCREEN_W / 2, 37, '#fff', 12, 'center');
-        canvas.resetAlpha();
+        const w = 220, h = 34;
+        const x = SCREEN_W / 2 - w / 2;
+        const y = 38;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        // Glow
+        const g = ctx.createLinearGradient(x, y, x, y + h);
+        g.addColorStop(0, 'rgba(20, 24, 60, 0.95)');
+        g.addColorStop(1, 'rgba(8, 12, 30, 0.95)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = '#ff9838';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        // Outer glow
+        ctx.shadowColor = '#ff9838';
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = 'rgba(255, 180, 80, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+        ctx.shadowBlur = 0;
+        canvas.drawTextShadow(this.notification, SCREEN_W / 2, y + 11, '#fff', 13, 'center');
+        ctx.restore();
     }
 }

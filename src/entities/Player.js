@@ -126,41 +126,97 @@ export class Player {
     }
 
     render(canvas) {
+        const ctx = canvas.ctx;
         const drawX = this.x - canvas.camera.x + canvas.shake.x;
         const drawY = this.y - canvas.camera.y + canvas.shake.y;
+        const cx = drawX + TILE_SIZE / 2;
 
-        // Shadow
-        canvas.ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        canvas.ctx.beginPath();
-        canvas.ctx.ellipse(drawX + TILE_SIZE / 2, drawY + TILE_SIZE - 2, 10, 4, 0, 0, Math.PI * 2);
-        canvas.ctx.fill();
+        // Shadow (stretches with bike)
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(cx, drawY + TILE_SIZE - 2, 10, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Body
+        // Walking bob
         const bob = this.moving ? Math.sin(this.animFrame * Math.PI / 2) * 2 : 0;
-        canvas.ctx.fillStyle = this.sprite;
-        canvas.ctx.fillRect(drawX + 6, drawY + 8 - bob, TILE_SIZE - 12, TILE_SIZE - 10);
+        const stepOffset = this.moving ? (this.animFrame % 2 === 0 ? 1 : -1) : 0;
+
+        // Legs
+        ctx.fillStyle = '#2a2850';
+        ctx.fillRect(drawX + 10, drawY + 24, 4, 5 + stepOffset);
+        ctx.fillRect(drawX + 18, drawY + 24, 4, 5 - stepOffset);
+        // Boots
+        ctx.fillStyle = '#1a1018';
+        ctx.fillRect(drawX + 9, drawY + 28, 5, 2);
+        ctx.fillRect(drawX + 18, drawY + 28, 5, 2);
+
+        // Body - layered jacket
+        ctx.fillStyle = '#2d7acc';
+        ctx.fillRect(drawX + 6, drawY + 14 - bob, TILE_SIZE - 12, 11);
+        // Darker side
+        ctx.fillStyle = '#1e5a9a';
+        ctx.fillRect(drawX + 6, drawY + 22 - bob, TILE_SIZE - 12, 3);
+        // Center stripe
+        ctx.fillStyle = '#ffd54f';
+        ctx.fillRect(drawX + 15, drawY + 14 - bob, 2, 11);
+        // Belt
+        ctx.fillStyle = '#4a3018';
+        ctx.fillRect(drawX + 6, drawY + 23 - bob, TILE_SIZE - 12, 2);
+        // Buckle
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(drawX + 15, drawY + 23 - bob, 2, 2);
+
+        // Arms
+        ctx.fillStyle = '#2d7acc';
+        ctx.fillRect(drawX + 4, drawY + 15 - bob, 3, 8);
+        ctx.fillRect(drawX + 25, drawY + 15 - bob, 3, 8);
+        // Hands
+        ctx.fillStyle = '#f5cba7';
+        ctx.fillRect(drawX + 4, drawY + 22 - bob, 3, 2);
+        ctx.fillRect(drawX + 25, drawY + 22 - bob, 3, 2);
 
         // Head
-        canvas.ctx.fillStyle = '#f5cba7';
-        canvas.ctx.beginPath();
-        canvas.ctx.arc(drawX + TILE_SIZE / 2, drawY + 8 - bob, 8, 0, Math.PI * 2);
-        canvas.ctx.fill();
+        ctx.fillStyle = '#f5cba7';
+        ctx.beginPath();
+        ctx.arc(cx, drawY + 9 - bob, 7, 0, Math.PI * 2);
+        ctx.fill();
+        // Cheek shading
+        ctx.fillStyle = 'rgba(220, 140, 100, 0.5)';
+        ctx.fillRect(cx - 5, drawY + 11 - bob, 2, 1);
+        ctx.fillRect(cx + 3, drawY + 11 - bob, 2, 1);
 
-        // Hat
-        canvas.ctx.fillStyle = '#e74c3c';
-        canvas.ctx.fillRect(drawX + 5, drawY - 1 - bob, TILE_SIZE - 10, 6);
+        // Hair showing under cap
+        ctx.fillStyle = '#3a2010';
+        ctx.fillRect(drawX + 9, drawY + 5 - bob, 14, 2);
 
-        // Direction indicator (eyes)
-        canvas.ctx.fillStyle = '#111';
+        // Cap
+        ctx.fillStyle = '#e53935';
+        ctx.beginPath();
+        ctx.arc(cx, drawY + 4 - bob, 7, Math.PI, 0);
+        ctx.fill();
+        // Cap band
+        ctx.fillStyle = '#b71c1c';
+        ctx.fillRect(drawX + 8, drawY + 3 - bob, 16, 2);
+        // Cap brim (direction-aware)
+        ctx.fillStyle = '#b71c1c';
+        if (this.direction === 'right') ctx.fillRect(cx + 3, drawY + 4 - bob, 6, 2);
+        else if (this.direction === 'left') ctx.fillRect(cx - 9, drawY + 4 - bob, 6, 2);
+        else if (this.direction === 'down') ctx.fillRect(cx - 3, drawY + 5 - bob, 6, 2);
+        // Cap logo
+        ctx.fillStyle = '#ffeb3b';
+        ctx.fillRect(cx - 1, drawY - bob, 2, 2);
+
+        // Eyes (direction-aware)
+        ctx.fillStyle = '#111';
         const eyeOffsets = {
-            down: [[-3, 0], [3, 0]],
-            up: [[-3, -2], [3, -2]],
+            down: [[-3, 0], [2, 0]],
+            up: [[-3, -2], [2, -2]],
             left: [[-4, -1], [-1, -1]],
             right: [[1, -1], [4, -1]],
         };
         const eyes = eyeOffsets[this.direction];
         for (const [ex, ey] of eyes) {
-            canvas.ctx.fillRect(drawX + TILE_SIZE / 2 + ex - 1, drawY + 8 + ey - bob - 1, 2, 2);
+            ctx.fillRect(cx + ex, drawY + 9 + ey - bob, 2, 2);
         }
     }
 }

@@ -391,11 +391,23 @@ function drawOne(ctx, cfg, x, y, s, isBack, animFrame) {
     paintTopFeatures(ctx, x, y, s, cfg, isBack, animFrame);
 }
 
+export function hasCryptidSprite(id) {
+    return !!C[id];
+}
+
 export function drawCryptidSprite(ctx, id, x, y, size, isBack = false, animFrame = 0) {
     const cfg = C[id];
-    if (!cfg) throw new Error('no sprite for ' + id);
+    if (!cfg) return false;
     ctx.save();
+    // Reset any leaked state
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = ctx.globalAlpha || 1;
     if (isBack) { ctx.translate(x * 2, 0); ctx.scale(-1, 1); }
-    drawOne(ctx, cfg, x, y, size, isBack, animFrame);
-    ctx.restore();
+    try {
+        drawOne(ctx, cfg, x, y, size, isBack, animFrame);
+    } finally {
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+    return true;
 }

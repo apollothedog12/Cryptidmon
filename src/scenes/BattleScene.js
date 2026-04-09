@@ -1,12 +1,16 @@
 import { SCREEN_W, SCREEN_H, COLORS, TYPE_COLORS, TEXT_SPEED, HP_DRAIN_SPEED } from '../utils/constants.js';
 import { clamp, lerp, randomInt, randomFloat, chance } from '../utils/math.js';
 import { getItem, Items } from '../data/items.js';
+import { getTheme } from '../ui/TileRenderer.js';
 
 export class BattleScene {
-    constructor(playerParty, enemyCryptid, isTrainer, trainerData, battleSystem, catchSystem, onBattleEnd) {
+    constructor(playerParty, enemyCryptid, isTrainer, trainerData, battleSystem, catchSystem, onBattleEnd, regionId = 'pinewatch') {
         this.game = null;
         this.canvas = null;
         this.input = null;
+
+        this.regionId = regionId;
+        this.theme = getTheme(regionId);
 
         this.playerParty = playerParty;
         this.playerCryptid = playerParty.find(c => !c.isFainted) || playerParty[0];
@@ -1116,28 +1120,95 @@ export class BattleScene {
     }
 
     renderBackground(canvas) {
-        // Gradient background
         const ctx = canvas.ctx;
-        const grad = ctx.createLinearGradient(0, 0, 0, SCREEN_H);
-        grad.addColorStop(0, '#2c3e50');
-        grad.addColorStop(0.4, '#3498db');
-        grad.addColorStop(0.7, '#27ae60');
-        grad.addColorStop(1, '#1a472a');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+        const t = this.theme;
 
-        // Ground plane
-        canvas.drawRectUI(0, 160, SCREEN_W, SCREEN_H - 160, '#2d5a27');
+        // Sky gradient - themed
+        const sky = ctx.createLinearGradient(0, 0, 0, 160);
+        const skyPalettes = {
+            pinewatch:  ['#1a2a4a', '#4a6a9a', '#7aa8d0'],
+            appalachia: ['#2a1a3a', '#5a4a7a', '#8a7ab0'],
+            greatplains:['#3a2a1a', '#c88a4a', '#f0c888'],
+            southwest:  ['#3a1a1a', '#d84828', '#f8a848'],
+            mistyloch:  ['#1a2a3a', '#4a6a8a', '#a0c0d8'],
+            frozenpeak: ['#1a2a4a', '#4a7ab0', '#b8d8ec'],
+        };
+        const pal = skyPalettes[this.regionId] || skyPalettes.pinewatch;
+        sky.addColorStop(0, pal[0]);
+        sky.addColorStop(0.5, pal[1]);
+        sky.addColorStop(1, pal[2]);
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, SCREEN_W, 160);
 
-        // Ground line
-        canvas.drawRectUI(0, 158, SCREEN_W, 4, '#3d7a2e');
+        // Distant silhouette mountains / details
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath();
+        ctx.moveTo(0, 140);
+        for (let x = 0; x <= SCREEN_W; x += 20) {
+            const h = 30 + Math.sin(x * 0.05) * 15 + Math.sin(x * 0.12) * 10;
+            ctx.lineTo(x, 140 - h);
+        }
+        ctx.lineTo(SCREEN_W, 160);
+        ctx.lineTo(0, 160);
+        ctx.closePath();
+        ctx.fill();
 
-        // Subtle ground texture dots
-        for (let i = 0; i < 20; i++) {
+        // Sun/moon disc
+        const sunColor = this.regionId === 'frozenpeak' || this.regionId === 'mistyloch' ? '#d8e8f8' : '#ffe082';
+        ctx.fillStyle = sunColor;
+        ctx.beginPath();
+        ctx.arc(SCREEN_W - 80, 40, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `${sunColor}44`;
+        ctx.beginPath();
+        ctx.arc(SCREEN_W - 80, 40, 22, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ground gradient
+        const ground = ctx.createLinearGradient(0, 158, 0, SCREEN_H);
+        ground.addColorStop(0, t.grassHi);
+        ground.addColorStop(0.5, t.grassBase);
+        ground.addColorStop(1, t.grassLo);
+        ctx.fillStyle = ground;
+        ctx.fillRect(0, 158, SCREEN_W, SCREEN_H - 158);
+
+        // Ground line highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillRect(0, 158, SCREEN_W, 2);
+
+        // Subtle ground texture dots + flowers
+        for (let i = 0; i < 30; i++) {
             const gx = (i * 53 + 17) % SCREEN_W;
             const gy = 170 + (i * 37 + 11) % 60;
-            canvas.drawRectUI(gx, gy, 3, 2, 'rgba(0,0,0,0.1)');
+            ctx.fillStyle = i % 4 === 0 ? t.grassLo : 'rgba(0,0,0,0.12)';
+            ctx.fillRect(gx, gy, 3, 2);
         }
+        // Scattered flowers
+        if (t.grassDecor && t.grassDecor.length) {
+            for (let i = 0; i < 8; i++) {
+                const gx = (i * 71 + 33) % SCREEN_W;
+                const gy = 180 + (i * 23 + 7) % 50;
+                ctx.fillStyle = t.grassDecor[i % t.grassDecor.length];
+                ctx.fillRect(gx, gy, 2, 2);
+            }
+        }
+
+        // Battle arena circles
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        // Enemy circle
+        const eg = ctx.createRadialGradient(this.enemyTargetX, 120, 10, this.enemyTargetX, 120, 70);
+        eg.addColorStop(0, 'rgba(255,255,255,0.25)');
+        eg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = eg;
+        ctx.fillRect(this.enemyTargetX - 70, 50, 140, 140);
+        // Player circle
+        const pg = ctx.createRadialGradient(this.playerTargetX, 220, 10, this.playerTargetX, 220, 80);
+        pg.addColorStop(0, 'rgba(255,255,255,0.25)');
+        pg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = pg;
+        ctx.fillRect(this.playerTargetX - 80, 150, 160, 140);
+        ctx.restore();
     }
 
     renderBattleField(canvas) {

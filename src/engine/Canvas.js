@@ -1,5 +1,5 @@
 import { SCREEN_W, SCREEN_H, TILE_SIZE } from '../utils/constants.js';
-import { drawCryptidSprite as drawCustomSprite } from '../ui/CryptidSprites.js';
+import { drawCryptidSprite as drawCustomSprite, hasCryptidSprite } from '../ui/CryptidSprites.js';
 
 export class Canvas {
     constructor() {
@@ -142,22 +142,25 @@ export class Canvas {
         const cx = Math.floor(x);
         const cy = Math.floor(y);
         const s = size;
-        const animFrame = Math.floor(Date.now() / 250) % 4;
+        const animFrame = Date.now() * 0.003;
 
         // Shadow beneath
-        this.ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        this.ctx.fillStyle = 'rgba(0,0,0,0.28)';
         this.ctx.beginPath();
-        this.ctx.ellipse(cx, cy + s * 0.5, s * 0.35, s * 0.08, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(cx, cy + s * 0.5, s * 0.4, s * 0.1, 0, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Try custom sprite first
-        if (cryptidId) {
+        // Custom sprite path
+        if (cryptidId && hasCryptidSprite(cryptidId)) {
+            this.ctx.save();
             try {
                 drawCustomSprite(this.ctx, cryptidId, cx, cy, s, isBack, animFrame);
-                return;
-            } catch(e) {
-                // Fall through to default
+            } catch (e) {
+                console.error('sprite draw failed for', cryptidId, e);
             }
+            this.ctx.restore();
+            if (name) this.drawText(name, cx, cy + s * 0.55, '#fff', 10, 'center');
+            return;
         }
 
         // Default fallback sprite
